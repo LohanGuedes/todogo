@@ -12,10 +12,22 @@ import (
 	"strings"
 )
 
+const (
+	todoMatchComment = "// TODO"
+	todoValidComment = "// TODO:"
+	todoJumpCut      = len(todoValidComment)
+	ticketComment    = "// @ticket"
+	ticketJumpCut    = len(ticketComment)
+)
+
 var (
-	ErrEmptyTodo     = errors.New("todos must have a description and link")
-	ErrUntrackedTodo = errors.New("todos must have task-manager link")
-	ErrInvalidLink   = errors.New("invalid task-manager URL link")
+	ErrEmptyTodoDescription         = errors.New("todos must have a small description")
+	ErrUntrackedTodo                = errors.New("todos must have task-manager link")
+	ErrInvalidLink                  = errors.New("ticket property invalid url link")
+	ErrInvalidIssueTrackerLink      = errors.New("invalid task-manager url link")
+	ErrMissingTicketPropertyComment = errors.New("TODO's must have \"@ticket\" comment-property")
+	ErrMissingTicketLink            = errors.New("TODO's @ticket property must not be empty")
+	ErrInvalidTODOComment           = errors.New("TODO's must have a ':' before its description")
 )
 
 // whats up
@@ -23,23 +35,33 @@ type visitor struct {
 	fset *token.FileSet
 }
 
-const jumpCut = len("// TODO")
-
-// TODO: Must have the possibility of recieveing valid url for ticket
-func parseTodo(comment *ast.Comment) error {
-	str := comment.Text[jumpCut:]
-	text := strings.Trim(str, ": ")
-	if text == "" {
-		return ErrEmptyTodo
+// TODO: Must have the possibility of recieveing valid url for ticket (only allow for a specific domain)
+func parseTodo(commentGroup *ast.CommentGroup) error {
+	todoDesc := commentGroup.List[0]
+	if len(todoDesc.Text) < todoJumpCut || todoDesc.Text[todoJumpCut-1] != ':' {
+		return ErrInvalidTODOComment
 	}
 
-	split := strings.Split(text, "@")
-	if len(split) < 2 {
+	text := todoDesc.Text[todoJumpCut:]
+	if text == "" {
+		return ErrEmptyTodoDescription
+	}
+
+	// Validate 2nd property: @ticket
+	if len(commentGroup.List) < 2 {
+		return ErrMissingTicketPropertyComment
+	}
+	todoTicket := commentGroup.List[1]
+
+	if !strings.HasPrefix(todoTicket.Text, ticketComment) {
+		// make this error a struct so that the function above can use errors.As and provide a better error message
 		return ErrUntrackedTodo
 	}
-	// fmt.Println(split)
-
-	_, err := url.ParseRequestURI(split[1])
+	rawURL := strings.Trim(todoTicket.Text[ticketJumpCut:], " ")
+	if rawURL == "" {
+		return ErrMissingTicketLink
+	}
+	_, err := url.ParseRequestURI(rawURL)
 	if err != nil {
 		return ErrInvalidLink
 	}
@@ -48,24 +70,22 @@ func parseTodo(comment *ast.Comment) error {
 }
 
 func (v visitor) Visit(node ast.Node) ast.Visitor {
-	comment, ok := node.(*ast.Comment)
+	commentGroup, ok := node.(*ast.CommentGroup)
 	if !ok {
 		return v
 	}
 
-	if len(comment.Text) < 7 { // Cannot be a TODO comment
+	if !strings.HasPrefix(commentGroup.List[0].Text, todoMatchComment) {
 		return v
 	}
-	text := strings.Trim(comment.Text, " ")[3:]
-	if text[:4] == "TODO" || text[:5] == "TODO:" {
-		err := parseTodo(comment)
-		if err != nil {
-			fmt.Printf("%s: %s",
-				v.fset.Position(node.Pos()),
-				err.Error(),
-			)
-			return v
-		}
+
+	err := parseTodo(commentGroup)
+	if err != nil {
+		fmt.Printf("%s: %s\n",
+			v.fset.Position(node.Pos()),
+			err.Error(),
+		)
+		return v
 	}
 	return v
 }

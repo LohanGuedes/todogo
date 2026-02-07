@@ -2,19 +2,28 @@ package main
 
 import "log"
 
-// TODO: @https://google.com // Should also work
+// TODO: Alguma coisa que descreve a tarefa
+// @ticket https://google.com
+// asdfkjaf
 func foo(format string, args ...interface{}) {
 	const prefix = "[my] "
 	log.Printf(prefix+format, args...)
 }
 
-// TODO: This should do X
+// TODO: A small description
+// @ticket https://google.com
 func bar(format string, args ...interface{}) {
 	const prefix = "[my] "
 	log.Printf(prefix+format, args...)
 }
 
-// TODO: This should do X @https://google.com
+// TODO A small description
+func bez(format string, args ...interface{}) {
+	const prefix = "[my] "
+	log.Printf(prefix+format, args...)
+}
+
+// TODO
 func baz(format string, args ...interface{}) {
 	const prefix = "[my] "
 	log.Printf(prefix+format, args...)
